@@ -1,0 +1,82 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+$num_nodes = 4
+$ips = ["192.168.0.50", "192.168.0.51", "192.168.0.52", "192.168.0.53", "192.168.0.54", ]
+$iface = "enp0s25"
+
+$provision = <<-SCRIPT
+apt-get update && apt-get -y install apt-transport-https ca-certificates curl software-properties-common zile mc
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+apt-get update && apt-get -y install docker-ce=18.06.2~ce~3-0~ubuntu
+cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+mkdir -p /etc/systemd/system/docker.service.d
+systemctl daemon-reload
+systemctl restart docker
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb https://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+apt-get update
+apt-get install -y kubelet kubeadm kubectl
+apt-mark hold kubelet kubeadm kubectl
+echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip}"' > /etc/default/kubelet
+SCRIPT
+
+$master_provision = <<-SCRIPT
+kubeadm init --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=%{ip}
+cp /etc/kubernetes/admin.conf /vagrant/
+openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null |    openssl dgst -sha256 -hex | sed 's/^.* //' > /vagrant/CA-sha
+SCRIPT
+
+$node_provision = <<-SCRIPT
+kubeadm join 192.168.0.50:6443 --token abcdef.0123456789abcdef --discovery-token-ca-cert-hash sha256:$(cat /vagrant/CA-sha)
+SCRIPT
+
+def routes(what)
+  a = []
+  (0..$num_nodes).each do |i|
+    a[i] = "ip route add 10.10.#{i}.0/24 via #{$ips[i]}"
+  end
+  b = a.reject{|e| e=~ /#{what}/}
+  return b.join("\n")
+end
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/xenial64"
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"
+  end
+  
+  config.vm.define "master" do |master|
+    ip = $ips[0]
+    master.vm.network "public_network", ip: ip, bridge: $iface
+    master.vm.hostname = "master"
+    p = $provision + $master_provision
+    p = p.% ip:ip
+    master.vm.provision "shell", inline: p
+    master.vm.provision "shell", inline: routes(ip), run: 'always'
+  end
+
+  (1..$num_nodes).each do |i|
+    config.vm.define "node#{i}" do |node|
+      ip = $ips[i]
+      node.vm.network "public_network", ip: ip, bridge: $iface
+      node.vm.hostname = "node#{i}"
+      p = $provision + $node_provision
+      p = p.% ip:ip
+      node.vm.provision "shell", inline: p
+      node.vm.provision "shell", inline: routes(ip), run: 'always'
+    end
+  end
+end
