@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: busyboxd
+  labels:
+    k8s-app: busyboxd
+spec:
+  selector:
+    matchLabels:
+      name: busyboxd
+  template:
+    metadata:
+      labels:
+        name: busyboxd
+    spec:
+      containers:
+      - image: busybox
+        command:
+          - sleep
+          - "3600"
+        imagePullPolicy: IfNotPresent
+        name: busybox

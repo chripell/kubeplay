@@ -1,0 +1,4 @@
+*.log
+.vagrant
+CA-sha
+admin.conf
