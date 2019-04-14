@@ -4,6 +4,7 @@
 $num_nodes = 4
 $ips = ["192.168.0.50", "192.168.0.51", "192.168.0.52", "192.168.0.53", "192.168.0.54", ]
 $iface = "enp0s25"
+$registry_ip = "192.168.0.4"
 
 $provision = <<-SCRIPT
 apt-get update
@@ -28,6 +29,8 @@ apt-mark hold kubelet kubeadm kubectl
 
 echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip} --container-runtime=remote --container-runtime-endpoint=/var/run/crio/crio.sock --cgroup-driver=systemd"' > /etc/default/kubelet
 systemctl daemon-reload
+
+echo %{registry} my-registry >> /etc/hosts
 SCRIPT
 
 $master_provision = <<-SCRIPT
@@ -65,13 +68,13 @@ Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
   end
-  
+
   config.vm.define "master" do |master|
     ip = $ips[0]
     master.vm.network "public_network", ip: ip, bridge: $iface
     master.vm.hostname = "master"
     p = $provision + $master_provision
-    p = p.% ip:ip
+    p = p.% ip:ip, registry:$registry_ip
     master.vm.provision "shell", inline: $bridge, run: 'always'
     master.vm.provision "shell", inline: p
     master.vm.provision "shell", inline: routes(ip), run: 'always'
@@ -83,7 +86,7 @@ Vagrant.configure("2") do |config|
       node.vm.network "public_network", ip: ip, bridge: $iface
       node.vm.hostname = "node#{i}"
       p = $provision + $node_provision
-      p = p.% ip:ip
+      p = p.% ip:ip, registry:$registry_ip
       node.vm.provision "shell", inline: $bridge, run: 'always'
       node.vm.provision "shell", inline: p
       node.vm.provision "shell", inline: routes(ip), run: 'always'
