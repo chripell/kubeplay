@@ -6,41 +6,49 @@ $ips = ["192.168.0.50", "192.168.0.51", "192.168.0.52", "192.168.0.53", "192.168
 $iface = "enp0s25"
 
 $provision = <<-SCRIPT
-apt-get update && apt-get -y install apt-transport-https ca-certificates curl software-properties-common zile mc
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
-add-apt-repository -y "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-apt-get update && apt-get -y install docker-ce=18.06.2~ce~3-0~ubuntu
-cat > /etc/docker/daemon.json <<EOF
-{
-  "exec-opts": ["native.cgroupdriver=systemd"],
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "100m"
-  },
-  "storage-driver": "overlay2"
-}
-EOF
-mkdir -p /etc/systemd/system/docker.service.d
-systemctl daemon-reload
-systemctl restart docker
+apt-get update
+apt-get -y install mc zile
+apt-get install software-properties-common
+add-apt-repository -y ppa:projectatomic/ppa
+apt-get update
+
+apt-get -y install cri-o-1.12
+cp /vagrant/crio.conf /etc/crio/
+systemctl start crio
+systemctl enable crio
+
+apt-get update && apt-get install -y apt-transport-https curl
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
 deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 apt-get update
-apt-get install -y kubelet kubeadm kubectl
+apt-get install --allow-unauthenticated -y kubelet kubeadm kubectl
 apt-mark hold kubelet kubeadm kubectl
-echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip}"' > /etc/default/kubelet
+
+echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip} --container-runtime=remote --container-runtime-endpoint=/var/run/crio/crio.sock --cgroup-driver=systemd"' > /etc/default/kubelet
+systemctl daemon-reload
 SCRIPT
 
 $master_provision = <<-SCRIPT
-kubeadm init --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=%{ip}
+kubeadm init --cri-socket=/var/run/crio/crio.sock --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.0.50
 cp /etc/kubernetes/admin.conf /vagrant/
 openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null |    openssl dgst -sha256 -hex | sed 's/^.* //' > /vagrant/CA-sha
 SCRIPT
 
 $node_provision = <<-SCRIPT
 kubeadm join 192.168.0.50:6443 --token abcdef.0123456789abcdef --discovery-token-ca-cert-hash sha256:$(cat /vagrant/CA-sha)
+SCRIPT
+
+$bridge = <<-SCRIPT
+modprobe overlay
+modprobe br_netfilter
+cat > /etc/sysctl.d/99-kubernetes-cri.conf <<EOF
+net.bridge.bridge-nf-call-iptables  = 1
+net.ipv4.ip_forward                 = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+EOF
+sysctl --system
 SCRIPT
 
 def routes(what)
@@ -64,6 +72,7 @@ Vagrant.configure("2") do |config|
     master.vm.hostname = "master"
     p = $provision + $master_provision
     p = p.% ip:ip
+    master.vm.provision "shell", inline: $bridge, run: 'always'
     master.vm.provision "shell", inline: p
     master.vm.provision "shell", inline: routes(ip), run: 'always'
   end
@@ -75,6 +84,7 @@ Vagrant.configure("2") do |config|
       node.vm.hostname = "node#{i}"
       p = $provision + $node_provision
       p = p.% ip:ip
+      node.vm.provision "shell", inline: $bridge, run: 'always'
       node.vm.provision "shell", inline: p
       node.vm.provision "shell", inline: routes(ip), run: 'always'
     end
