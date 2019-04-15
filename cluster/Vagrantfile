@@ -5,6 +5,7 @@ $num_nodes = 4
 $ips = ["192.168.0.50", "192.168.0.51", "192.168.0.52", "192.168.0.53", "192.168.0.54", ]
 $iface = "enp0s25"
 $registry_ip = "192.168.0.4"
+$master_ip = $ips[0]
 
 $provision = <<-SCRIPT
 apt-get update
@@ -34,13 +35,13 @@ echo %{registry} my-registry >> /etc/hosts
 SCRIPT
 
 $master_provision = <<-SCRIPT
-kubeadm init --cri-socket=/var/run/crio/crio.sock --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=192.168.0.50
+kubeadm init --cri-socket=/var/run/crio/crio.sock --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=%{master_ip}
 cp /etc/kubernetes/admin.conf /vagrant/
 openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null |    openssl dgst -sha256 -hex | sed 's/^.* //' > /vagrant/CA-sha
 SCRIPT
 
 $node_provision = <<-SCRIPT
-kubeadm join 192.168.0.50:6443 --token abcdef.0123456789abcdef --discovery-token-ca-cert-hash sha256:$(cat /vagrant/CA-sha)
+kubeadm join %{master_ip}:6443 --token abcdef.0123456789abcdef --discovery-token-ca-cert-hash sha256:$(cat /vagrant/CA-sha)
 SCRIPT
 
 $bridge = <<-SCRIPT
@@ -54,15 +55,6 @@ EOF
 sysctl --system
 SCRIPT
 
-def routes(what)
-  a = []
-  (0..$num_nodes).each do |i|
-    a[i] = "ip route add 10.10.#{i}.0/24 via #{$ips[i]}"
-  end
-  b = a.reject{|e| e=~ /#{what}/}
-  return b.join("\n")
-end
-
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/xenial64"
   config.vm.provider "virtualbox" do |vb|
@@ -74,10 +66,9 @@ Vagrant.configure("2") do |config|
     master.vm.network "public_network", ip: ip, bridge: $iface
     master.vm.hostname = "master"
     p = $provision + $master_provision
-    p = p.% ip:ip, registry:$registry_ip
+    p = p.% ip:ip, registry:$registry_ip, master_ip:$master_ip
     master.vm.provision "shell", inline: $bridge, run: 'always'
     master.vm.provision "shell", inline: p
-    master.vm.provision "shell", inline: routes(ip), run: 'always'
   end
 
   (1..$num_nodes).each do |i|
@@ -86,10 +77,9 @@ Vagrant.configure("2") do |config|
       node.vm.network "public_network", ip: ip, bridge: $iface
       node.vm.hostname = "node#{i}"
       p = $provision + $node_provision
-      p = p.% ip:ip, registry:$registry_ip
+      p = p.% ip:ip, registry:$registry_ip, master_ip:$master_ip
       node.vm.provision "shell", inline: $bridge, run: 'always'
       node.vm.provision "shell", inline: p
-      node.vm.provision "shell", inline: routes(ip), run: 'always'
     end
   end
 end

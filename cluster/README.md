@@ -19,8 +19,7 @@ just copy it as the global config:
 cp admin.conf $HOME/.kube/config
 ```
 
-The scripts sets up the routing table on each node to allow
-communications among PODs, so you can use a simple CNI:
+For pod networking, kube-router works out of the box:
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/cloudnativelabs/kube-router/master/daemonset/kubeadm-kuberouter.yaml
@@ -30,4 +29,7 @@ Afterwards, you can spawn the worker nodes:
 
 ```
 vagrant up node1
+vagrant up node2
+vagrant up node3
+vagrant up node4
 ```
