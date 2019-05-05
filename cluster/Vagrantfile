@@ -31,7 +31,6 @@ apt-mark hold kubelet kubeadm kubectl
 echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip} --container-runtime=remote --container-runtime-endpoint=/var/run/crio/crio.sock --cgroup-driver=systemd"' > /etc/default/kubelet
 systemctl daemon-reload
 
-echo %{registry} my-registry >> /etc/hosts
 SCRIPT
 
 $master_provision = <<-SCRIPT
@@ -55,6 +54,23 @@ EOF
 sysctl --system
 SCRIPT
 
+$hosts = <<-SCRIPT
+cat > /etc/hosts <<EOF
+127.0.0.1	localhost
+
+# The following lines are desirable for IPv6 capable hosts
+::1	ip6-localhost	ip6-loopback
+fe00::0	ip6-localnet
+ff00::0	ip6-mcastprefix
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+ff02::3	ip6-allhosts
+
+%{registry}	my-registry
+%{ip}	%{hostname}
+EOF
+SCRIPT
+
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/xenial64"
   config.vm.provider "virtualbox" do |vb|
@@ -63,22 +79,28 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "master" do |master|
     ip = $ips[0]
+    hostname = "master"
     master.vm.network "public_network", ip: ip, bridge: $iface
-    master.vm.hostname = "master"
+    master.vm.hostname = hostname
     p = $provision + $master_provision
     p = p.% ip:ip, registry:$registry_ip, master_ip:$master_ip
     master.vm.provision "shell", inline: $bridge, run: 'always'
+    hosts_provision = $hosts.% ip:ip, hostname:hostname, registry:$registry_ip
+    master.vm.provision "shell", inline: hosts_provision, run: 'always'
     master.vm.provision "shell", inline: p
   end
 
   (1..$num_nodes).each do |i|
     config.vm.define "node#{i}" do |node|
       ip = $ips[i]
+      hostname= "node#{i}"
       node.vm.network "public_network", ip: ip, bridge: $iface
-      node.vm.hostname = "node#{i}"
+      node.vm.hostname = hostname
       p = $provision + $node_provision
       p = p.% ip:ip, registry:$registry_ip, master_ip:$master_ip
       node.vm.provision "shell", inline: $bridge, run: 'always'
+      hosts_provision = $hosts.% ip:ip, hostname:hostname, registry:$registry_ip
+      node.vm.provision "shell", inline: hosts_provision, run: 'always'
       node.vm.provision "shell", inline: p
     end
   end
