@@ -14,7 +14,7 @@ apt-get install software-properties-common
 add-apt-repository -y ppa:projectatomic/ppa
 apt-get update
 
-apt-get -y install cri-o-1.12
+apt-get -y install cri-o-1.15
 cp /vagrant/crio.conf /etc/crio/
 systemctl start crio
 systemctl enable crio
