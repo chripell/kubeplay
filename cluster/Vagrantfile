@@ -8,25 +8,39 @@ $registry_ip = "192.168.0.4"
 $master_ip = $ips[0]
 
 $provision = <<-SCRIPT
-apt-get update
-apt-get -y install mc zile
-apt-get install software-properties-common
-add-apt-repository -y ppa:projectatomic/ppa
-apt-get update
 
-apt-get -y install cri-o-1.15
-cp /vagrant/crio.conf /etc/crio/
+OS=xUbuntu_20.04
+CRIO_VER=1.20
+KUBE_VER=1.20.5-00
+
+apt-get update -q
+apt-get -q -y install software-properties-common mc zile apt-transport-https curl
+
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$CRIO_VER/$OS/ /" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$CRIO_VER.list
+curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$CRIO_VER/$OS/Release.key | apt-key add -
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -
+apt-get update -q
+apt-get install -q -y cri-o cri-o-runc
+cat << CRIOCONF >> /etc/crio/crio.conf
+registries = [
+ 	"quay.io",
+	"docker.io",
+]
+insecure_registries = [
+"my-registry",
+]
+CRIOCONF
+systemctl stop crio
 systemctl start crio
 systemctl enable crio
 
-apt-get update && apt-get install -y apt-transport-https curl
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
 cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
 deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
-apt-get update
-apt-get install --allow-unauthenticated -y kubelet kubeadm kubectl
-apt-mark hold kubelet kubeadm kubectl
+apt-get update -q
+apt-get install -q -y kubelet=$KUBE_VER kubeadm=$KUBE_VER kubectl=$KUBE_VER
 
 echo 'KUBELET_EXTRA_ARGS="--node-ip=%{ip} --container-runtime=remote --container-runtime-endpoint=/var/run/crio/crio.sock --cgroup-driver=systemd"' > /etc/default/kubelet
 systemctl daemon-reload
@@ -34,7 +48,7 @@ systemctl daemon-reload
 SCRIPT
 
 $master_provision = <<-SCRIPT
-kubeadm init --cri-socket=/var/run/crio/crio.sock --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=%{master_ip}
+kubeadm init --cri-socket='unix:///run/crio/crio.sock' --token=abcdef.0123456789abcdef --token-ttl=0 --pod-network-cidr=10.10.0.0/16 --apiserver-advertise-address=%{master_ip}
 cp /etc/kubernetes/admin.conf /vagrant/
 openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null |    openssl dgst -sha256 -hex | sed 's/^.* //' > /vagrant/CA-sha
 SCRIPT
@@ -72,7 +86,7 @@ EOF
 SCRIPT
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "ubuntu/xenial64"
+  config.vm.box = "ubuntu/focal64"
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "2048"
   end
