@@ -5,6 +5,7 @@ Current version:
 * Base system: Ubuntu LTS Focal 20.04
 * Kubernetes: 1.20.5
 * CRI-O: 1.20
+* Cilium: 1.9.5
 
 The Vagrant configuration to setup a Kubernetes cluster is in the
 directory `cluster`. It uses CRI-O as a container runtime. It uses
@@ -42,6 +43,49 @@ It is useful to login into the kube-router pod for debugging:
 ```
 KR_POD=$(basename $(kubectl -n kube-system get pods -l k8s-app=kube-router --output name|head -n1))
 kubectl -n kube-system exec -it ${KR_POD} bash
+```
+
+## Cilium
+
+Cilium can be quickly installed via helm, which is available also for
+Arch Linux. It should be installed on the machine where you are going
+to run `kubectl`. Here also the stable repository is added:
+
+```
+helm repo add stable https://charts.helm.sh/stable
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+```
+
+then you can install Cilium with:
+
+```
+helm install cilium cilium/cilium --version 1.9.5 \
+   --namespace kube-system \
+   --set nodeinit.enabled=true \
+   --set kubeProxyReplacement=partial \
+   --set hostServices.enabled=false \
+   --set externalIPs.enabled=true \
+   --set nodePort.enabled=true \
+   --set hostPort.enabled=true \
+   --set bpf.masquerade=false \
+   --set image.pullPolicy=IfNotPresent \
+   --set ipam.mode=kubernetes
+
+```
+
+You should that cilium pods are up (there is enough one `cilium-operator`
+pod till there are any more workers) and coredns is not pending:
+
+```
+$ kubectl -n kube-system get pods
+cilium-node-init-q9l2m             1/1     Running   0          2m15s
+cilium-operator-654456485c-bp9gw   1/1     Running   0          2m15s
+cilium-operator-654456485c-wn5sd   0/1     Pending   0          2m15s
+cilium-xz8fl                       1/1     Running   0          2m15s
+coredns-74ff55c5b-klgjk            1/1     Running   0          4m30s
+coredns-74ff55c5b-l6jtq            1/1     Running   0          4m30s
+...
 ```
 
 # Worker Nodes
@@ -83,6 +127,21 @@ Total: 5
 Passed: 5
 Failed: 0
 Skipped: 0
+```
+
+You can also test Cilium:
+
+```
+kubectl create ns cilium-test
+kubectl apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/v1.9/examples/kubernetes/connectivity-check/connectivity-check.yaml
+kubectl get pods -n cilium-test
+```
+
+check livelness of pods, afterwards you can just delete everything in
+the namespace:
+
+```
+kubectl -n cilium-test delete all --all --wait
 ```
 
 # Dashboard
@@ -173,8 +232,8 @@ configuration files.
 
 * `nginx-service-nodeport.yaml` is the simplest way to make the
   service externally available. It gets assigned to a port on the
-  public IP address of the master. The main problem is that you have
-  to preallocate ports in the range 30000 to 32768.
+  public IP address of the nodes. The main problem is that you have to
+  preallocate ports in the range 30000 to 32768.
   
 ```
 $ wget -O- http://192.168.0.50:30080/
