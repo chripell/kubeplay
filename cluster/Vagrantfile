@@ -6,6 +6,7 @@ $ips = ["192.168.0.50", "192.168.0.51", "192.168.0.52", "192.168.0.53", "192.168
 $iface = "enp0s25"
 $registry_ip = "192.168.0.4"
 $master_ip = $ips[0]
+$memory = "2048"
 
 $provision = <<-SCRIPT
 
@@ -22,15 +23,7 @@ curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:sta
 curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -
 apt-get update -q
 apt-get install -q -y cri-o cri-o-runc
-cat << CRIOCONF >> /etc/crio/crio.conf
-registries = [
- 	"quay.io",
-	"docker.io",
-]
-insecure_registries = [
-"my-registry",
-]
-CRIOCONF
+cp /vagrant/my-registry.conf /etc/containers/registries.conf.d/
 systemctl stop crio
 systemctl start crio
 systemctl enable crio
@@ -80,7 +73,7 @@ ff02::1	ip6-allnodes
 ff02::2	ip6-allrouters
 ff02::3	ip6-allhosts
 
-%{registry}	my-registry
+%{registry}	my-registry.local
 %{ip}	%{hostname}
 EOF
 SCRIPT
@@ -88,7 +81,7 @@ SCRIPT
 Vagrant.configure("2") do |config|
   config.vm.box = "ubuntu/focal64"
   config.vm.provider "virtualbox" do |vb|
-    vb.memory = "2048"
+    vb.memory = $memory
   end
 
   config.vm.define "master" do |master|

@@ -11,8 +11,23 @@ The Vagrant configuration to setup a Kubernetes cluster is in the
 directory `cluster`. It uses CRI-O as a container runtime. It uses
 public networking, so be careful if you are not on a trusted
 network. You can define the network interface to bridge, the number of
-nodes and their IPs at the beginning of the file. You need first to
-`up` the master:
+nodes and their IPs at the beginning of the file. In the repository
+version:
+
+* Nodes will use interface `enp0s25` (default for Ubuntu).
+
+* The master has IP `192.168.0.50`
+
+* There will be 4 workers, from `192.168.0.51` to `192.168.0.54`. This
+  is the minimum number for running conformance tests.
+  
+* Each node will have 2G of RAM.
+
+* The cluster will look for a TLS-less registry on `192.168.0.4`. This
+  is *not* a good idea for exposed networks, however here this is just
+  a testing cluster.
+
+You need first to `up` the master:
 
 ```
 vagrant up master
@@ -243,3 +258,54 @@ HTTP request sent, awaiting response... 200 OK
 ...
 
 ```
+
+# Deploying a custom application
+
+As a pre-work, you might need unprivileged user namespaces. For Arch
+Linux, you just need to follow the [instructions on the Buildah
+page](https://wiki.archlinux.org/index.php/Buildah). If you not, you
+will get error messages related to `/etc/subuid` and
+`/etc/subgid`. This allows unprivileged containers, which is a pretty
+cool development.
+
+You need a local registry on `192.168.0.4` (configured above), and the
+custom images will be stored in store `/mnt/scratch/registry`. Podman
+in Arch Linux already has a bunch of upstream registries configured, I
+used the image from `docker.io/library/registry:2`.
+
+```
+podman run -d --name registry -p 5000:5000 -v /mnt/scratch/registry:/mnt/scratch/registry --restart=always registry:2
+```
+
+You can verify it is running using `podman ps`.
+
+All the code to be used next is in the `custom_app` directory. You can
+run the, well commented, `build.sh` to build a statically linked Go
+*Hello World!* server, create a container using buildah and push it to
+the local registry:
+
+```
+./build.sh
+```
+
+To test locally, you will need to add the IP address and port for the
+local, TLS-less, registry in the `[registries.insecure]` stanza of
+`/etc/containers/registries.conf` (and restart podman of course). You
+can start it with:
+
+```
+podman run -d --name my-hello -p 8080:8080  --restart=always my-hello:latest
+```
+
+and check it running with `podman ps` and connecting to
+`http://localhost:8080/`.
+
+Finally, your application can be deployed to the kubeplay cluster (via
+a nodeport, so you can try it by connecting to the address of a node):
+
+
+```
+kubectl apply -f my-hello-deployment-nodeport.yaml
+```
+
+You can verify it working by connecting to port 30080 on any node.
