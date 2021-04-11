@@ -1,6 +1,9 @@
 # Kubeplay
 
-Current version:
+You can find everything you need to deploy your *Kubernetes cluster in
+a VirtualBox* in the [kubeplay
+repository](https://github.com/chripell/kubeplay). Current pinned
+version of the components are:
 
 * Base system: Ubuntu LTS Focal 20.04
 * Kubernetes: 1.20.5
@@ -8,11 +11,12 @@ Current version:
 * Cilium: 1.9.5
 
 The Vagrant configuration to setup a Kubernetes cluster is in the
-directory `cluster`. It uses CRI-O as a container runtime. It uses
-public networking, so be careful if you are not on a trusted
-network. You can define the network interface to bridge, the number of
-nodes and their IPs at the beginning of the file. In the repository
-version:
+[directory
+cluster](https://github.com/chripell/kubeplay/tree/master/cluster). It
+uses CRI-O as a container runtime. It uses public networking, so be
+careful if you are not on a trusted network. You can define the
+network interface to bridge, the number of nodes and their IPs at the
+beginning of the file. In the repository version:
 
 * Nodes will use interface `enp0s25` (default for Ubuntu).
 
@@ -25,7 +29,7 @@ version:
 
 * The cluster will look for a TLS-less registry on `192.168.0.4`. This
   is *not* a good idea for exposed networks, however here this is just
-  a testing cluster.
+  a testing cluster running inside a single machine.
 
 You need first to `up` the master:
 
@@ -210,11 +214,12 @@ kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get
 
 # Examples
 
-In the `examples` directory you find various configuration files to
-start *playing* with the cluster. You can deploy them using `kubectl
-apply -f`.  `busybox.yaml` and `busybox-daemon.yaml` start a busybox
-container as a single pod or a daemon set (one pod per node). You can
-connect to it with:
+In the [examples
+directory](https://github.com/chripell/kubeplay/tree/master/examples)
+you find various configuration files to start *playing* with the
+cluster. You can deploy them using `kubectl apply -f`.  `busybox.yaml`
+and `busybox-daemon.yaml` start a busybox container as a single pod or
+a daemon set (one pod per node). You can connect to it with:
 
 ```
 BB_POD=$(basename $(kubectl get pods -l app=busybox1 --output name|head -n1))
@@ -279,10 +284,12 @@ podman run -d --name registry -p 5000:5000 -v /mnt/scratch/registry:/mnt/scratch
 
 You can verify it is running using `podman ps`.
 
-All the code to be used next is in the `custom_app` directory. You can
-run the, well commented, `build.sh` to build a statically linked Go
-*Hello World!* server, create a container using buildah and push it to
-the local registry:
+All the code to be used next is in the [custom_app
+directory](https://github.com/chripell/kubeplay/tree/master/custom_app). You
+can run the, well commented,
+[build_and_push.sh](https://github.com/chripell/kubeplay/blob/master/custom_app/build_and_push.sh)
+to build a statically linked Go *Hello World!* server, create a
+container using buildah and push it to the local registry:
 
 ```
 ./build.sh
