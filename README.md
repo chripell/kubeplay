@@ -1,35 +1,23 @@
 # Kubeplay
 
-You can find everything you need to deploy your *Kubernetes cluster in
-a VirtualBox* in the [kubeplay
-repository](https://github.com/chripell/kubeplay). Current pinned
-version of the components are:
+You can find everything you need to deploy your *Kubernetes cluster in a VirtualBox* in the [kubeplay repository](https://github.com/chripell/kubeplay). Current pinned version of the components are:
 
 * Base system: Ubuntu LTS Focal 20.04
 * Kubernetes: 1.20.5
 * CRI-O: 1.20
 * Cilium: 1.9.5
 
-The Vagrant configuration to setup a Kubernetes cluster is in the
-[directory
-cluster](https://github.com/chripell/kubeplay/tree/master/cluster). It
-uses CRI-O as a container runtime. It uses public networking, so be
-careful if you are not on a trusted network. You can define the
-network interface to bridge, the number of nodes and their IPs at the
-beginning of the file. In the repository version:
+The Vagrant configuration to setup a Kubernetes cluster is in the [directory cluster](https://github.com/chripell/kubeplay/tree/master/cluster). It uses CRI-O as a container runtime. It uses public networking, so be careful if you are not on a trusted network. You can define the network interface to bridge, the number of nodes and their IPs at the beginning of the file. In the repository version:
 
 * Nodes will use interface `enp0s25` (default for Ubuntu).
 
 * The master has IP `192.168.0.50`
 
-* There will be 4 workers, from `192.168.0.51` to `192.168.0.54`. This
-  is the minimum number for running conformance tests.
+* There will be 4 workers, from `192.168.0.51` to `192.168.0.54`. This   is the minimum number for running conformance tests.
   
 * Each node will have 2G of RAM.
 
-* The cluster will look for a TLS-less registry on `192.168.0.4`. This
-  is *not* a good idea for exposed networks, however here this is just
-  a testing cluster running inside a single machine.
+* The cluster will look for a TLS-less registry on `192.168.0.4`. This   is *not* a good idea for exposed networks, however here this is just   a testing cluster running inside a single machine.
 
 You need first to `up` the master:
 
@@ -37,11 +25,7 @@ You need first to `up` the master:
 vagrant up master
 ```
 
-because it creates some files that are needed for the nodes. It also
-leaves the configuration file `admin.conf` you need to reference from
-`kubectl` on the host (please note that `kubectl` on the host is not
-installed by this script). If you don't have other clusters, you can
-just copy it as the global config:
+because it creates some files that are needed for the nodes. It also leaves the configuration file `admin.conf` you need to reference from `kubectl` on the host (please note that `kubectl` on the host is not installed by this script). If you don't have other clusters, you can just copy it as the global config:
 
 ```
 cp admin.conf $HOME/.kube/config
@@ -66,9 +50,7 @@ kubectl -n kube-system exec -it ${KR_POD} bash
 
 ## Cilium
 
-Cilium can be quickly installed via helm, which is available also for
-Arch Linux. It should be installed on the machine where you are going
-to run `kubectl`. Here also the stable repository is added:
+Cilium can be quickly installed via helm, which is available also for Arch Linux. It should be installed on the machine where you are going to run `kubectl`. Here also the stable repository is added:
 
 ```
 helm repo add stable https://charts.helm.sh/stable
@@ -93,8 +75,7 @@ helm install cilium cilium/cilium --version 1.9.5 \
 
 ```
 
-You should that cilium pods are up (there is enough one `cilium-operator`
-pod till there are any more workers) and coredns is not pending:
+You should that cilium pods are up (there is enough one `cilium-operator` pod till there are any more workers) and coredns is not pending:
 
 ```
 $ kubectl -n kube-system get pods
@@ -120,8 +101,7 @@ vagrant up node4
 
 # Testing
 
-You can use [sonobuoy](https://github.com/vmware-tanzu/sonobuoy) to
-test the cluster for conformance:
+You can use [sonobuoy](https://github.com/vmware-tanzu/sonobuoy) to test the cluster for conformance:
 
 ```
 sonobuoy run --wait --mode=certified-conformance
@@ -156,8 +136,7 @@ kubectl apply -n cilium-test -f https://raw.githubusercontent.com/cilium/cilium/
 kubectl get pods -n cilium-test
 ```
 
-check livelness of pods, afterwards you can just delete everything in
-the namespace:
+check livelness of pods, afterwards you can just delete everything in the namespace:
 
 ```
 kubectl -n cilium-test delete all --all --wait
@@ -165,21 +144,14 @@ kubectl -n cilium-test delete all --all --wait
 
 # Dashboard
 
-A good way to view cluster status is using
-[k9s](https://github.com/derailed/k9s). Otherwise, it is possible to
-install the Kubernetes dashboard and access it via a Kubernetes proxy:
+A good way to view cluster status is using [k9s](https://github.com/derailed/k9s). Otherwise, it is possible to install the Kubernetes dashboard and access it via a Kubernetes proxy:
 
 ```
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0/aio/deploy/recommended.yaml
 kubectl proxy
 ```
 
-You can access the dashboard at the URL
-[http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/](http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/),
-however you need to use a bearer token to authenticate. You need to
-create a service account named `admin-user` and bind it to the role
-`cluster-admin` which was created by `kubeadm` during cluster
-creation:
+You can access the dashboard at the URL [http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/](http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/), however you need to use a bearer token to authenticate. You need to create a service account named `admin-user` and bind it to the role `cluster-admin` which was created by `kubeadm` during cluster creation:
 
 ```
 cat <<EOF | kubectl apply -f -
@@ -205,8 +177,7 @@ subjects:
 EOF
 ```
 
-You can get the bearer token (to be entered in the UI for the proxy
-above) with:
+You can get the bearer token (to be entered in the UI for the proxy above) with:
 
 ```
 kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get sa/admin-user -o jsonpath="{.secrets[0].name}") -o go-template="{{.data.token | base64decode}}"
@@ -214,28 +185,18 @@ kubectl -n kubernetes-dashboard get secret $(kubectl -n kubernetes-dashboard get
 
 # Examples
 
-In the [examples
-directory](https://github.com/chripell/kubeplay/tree/master/examples)
-you find various configuration files to start *playing* with the
-cluster. You can deploy them using `kubectl apply -f`.  `busybox.yaml`
-and `busybox-daemon.yaml` start a busybox container as a single pod or
-a daemon set (one pod per node). You can connect to it with:
+In the [examples directory](https://github.com/chripell/kubeplay/tree/master/examples) you find various configuration files to start *playing* with the cluster. You can deploy them using `kubectl apply -f`.  [busybox.yaml](https://github.com/chripell/kubeplay/blob/master/examples/busybox.yaml) and [busybox-daemon.yaml](https://github.com/chripell/kubeplay/blob/master/examples/busybox-daemon.yaml) start a busybox container as a single pod or a daemon set (one pod per node). You can connect to it with:
 
 ```
 BB_POD=$(basename $(kubectl get pods -l app=busybox1 --output name|head -n1))
 kubectl exec -it ${BB_POD} sh
 ```
 
-Another example is a deployment of nginx. It consist of 3
-configuration files.
+Another example is a deployment of nginx. It consist of 3 configuration files.
 
-* `nginx-deployment.yaml` actually defines 2 pods running nginx, with
-  a label `my-nginx`.
+* [nginx-deployment.yaml](https://github.com/chripell/kubeplay/blob/master/examples/nginx-deployment.yaml) actually defines 2 pods running nginx, with   a label `my-nginx`.
   
-* `nginx-service.yaml` defines a service which makes the previous
-  deployment available internally to the cluster (and discoverable via
-  Core DNS). For example, you can log to the busybox pod and access
-  it:
+* [nginx-service.yaml](https://github.com/chripell/kubeplay/blob/master/examples/nginx-service.yaml) defines a service which makes the previous   deployment available internally to the cluster (and discoverable via   Core DNS). For example, you can log to the busybox pod and access   it:
   
  ```
  $ kubectl exec -it ${BB_POD} sh
@@ -250,10 +211,7 @@ configuration files.
 
  ```
 
-* `nginx-service-nodeport.yaml` is the simplest way to make the
-  service externally available. It gets assigned to a port on the
-  public IP address of the nodes. The main problem is that you have to
-  preallocate ports in the range 30000 to 32768.
+* [nginx-service-nodeport.yaml](https://github.com/chripell/kubeplay/blob/master/examples/nginx-service-nodeport.yaml) is the simplest way to make the   service externally available. It gets assigned to a port on the   public IP address of the nodes. The main problem is that you have to   preallocate ports in the range 30000 to 32768.
   
 ```
 $ wget -O- http://192.168.0.50:30080/
@@ -266,17 +224,9 @@ HTTP request sent, awaiting response... 200 OK
 
 # Deploying a custom application
 
-As a pre-work, you might need unprivileged user namespaces. For Arch
-Linux, you just need to follow the [instructions on the Buildah
-page](https://wiki.archlinux.org/index.php/Buildah). If you not, you
-will get error messages related to `/etc/subuid` and
-`/etc/subgid`. This allows unprivileged containers, which is a pretty
-cool development.
+As a pre-work, you might need unprivileged user namespaces. For Arch Linux, you just need to follow the [instructions on the Buildah page](https://wiki.archlinux.org/index.php/Buildah). If you not, you will get error messages related to `/etc/subuid` and `/etc/subgid`. This allows unprivileged containers, which is a pretty cool development.
 
-You need a local registry on `192.168.0.4` (configured above), and the
-custom images will be stored in store `/mnt/scratch/registry`. Podman
-in Arch Linux already has a bunch of upstream registries configured, I
-used the image from `docker.io/library/registry:2`.
+You need a local registry on `192.168.0.4` (configured above), and the custom images will be stored in store `/mnt/scratch/registry`. Podman in Arch Linux already has a bunch of upstream registries configured, I used the image from `docker.io/library/registry:2`.
 
 ```
 podman run -d --name registry -p 5000:5000 -v /mnt/scratch/registry:/mnt/scratch/registry --restart=always registry:2
@@ -284,31 +234,21 @@ podman run -d --name registry -p 5000:5000 -v /mnt/scratch/registry:/mnt/scratch
 
 You can verify it is running using `podman ps`.
 
-All the code to be used next is in the [custom_app
-directory](https://github.com/chripell/kubeplay/tree/master/custom_app). You
-can run the, well commented,
-[build_and_push.sh](https://github.com/chripell/kubeplay/blob/master/custom_app/build_and_push.sh)
-to build a statically linked Go *Hello World!* server, create a
-container using buildah and push it to the local registry:
+All the code to be used next is in the [custom_app directory](https://github.com/chripell/kubeplay/tree/master/custom_app). You can run the, well commented, [build_and_push.sh](https://github.com/chripell/kubeplay/blob/master/custom_app/build_and_push.sh) to build a statically linked Go *Hello World!* server, create a container using buildah and push it to the local registry:
 
 ```
-./build.sh
+./build_and_push.sh
 ```
 
-To test locally, you will need to add the IP address and port for the
-local, TLS-less, registry in the `[registries.insecure]` stanza of
-`/etc/containers/registries.conf` (and restart podman of course). You
-can start it with:
+To test locally, you will need to add the IP address and port for the local, TLS-less, registry in the `[registries.insecure]` stanza of `/etc/containers/registries.conf` (and restart podman of course). You can start it with:
 
 ```
 podman run -d --name my-hello -p 8080:8080  --restart=always my-hello:latest
 ```
 
-and check it running with `podman ps` and connecting to
-`http://localhost:8080/`.
+and check it running with `podman ps` and connecting to `http://localhost:8080/`.
 
-Finally, your application can be deployed to the kubeplay cluster (via
-a nodeport, so you can try it by connecting to the address of a node):
+Finally, your application can be deployed to the kubeplay cluster (via a nodeport, so you can try it by connecting to the address of a node):
 
 
 ```
